@@ -6,6 +6,7 @@ import (
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/service/s3/s3manager"
 	"github.com/aws/aws-sdk-go/service/s3/s3manager/s3manageriface"
+	"log"
 	"os"
 	"path"
 	"strings"
@@ -84,6 +85,7 @@ func (u *uploader) UploadFiles(files []string, basePath, bucket, keyPrefix strin
 			key, err := calculateBucketKey(file, basePath, keyPrefix)
 
 			if err != nil {
+				log.Printf("Error calculating bucket key: %s", err.Error())
 				rc <- &UploadResult{Error: err}
 			} else {
 				rc <- u.UploadFile(file, bucket, key)
@@ -101,7 +103,11 @@ func (u *uploader) UploadFiles(files []string, basePath, bucket, keyPrefix strin
 	wg.Wait()
 
 	if results.HasErrors() {
-		return results, ErrFolderUpload
+		var msg string
+		for _, err := range results.Errors() {
+			msg = msg + ", " + err.Error()
+		}
+		return results, fmt.Errorf("%s", msg)
 	}
 
 	return results, nil
@@ -125,6 +131,7 @@ func stripBasePath(file, basePath string) (string, error) {
 }
 
 func (u *uploader) UploadFile(file, bucket, key string) *UploadResult {
+	log.Printf("UploadFile(%s, %s, %s)", file, bucket, key)
 	result := &UploadResult{
 		File: file,
 	}

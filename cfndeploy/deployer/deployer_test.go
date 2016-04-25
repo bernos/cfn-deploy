@@ -33,5 +33,5 @@ func TestDeploy(t *testing.T) {
 
 	err := d.Deploy(o)
 
-	t.Errorf("%s", err)
+	t.Errorf("Error: %s", err.Error())
 }

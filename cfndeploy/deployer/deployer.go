@@ -8,6 +8,7 @@ import (
 	"os"
 	"path"
 	"path/filepath"
+	"strings"
 )
 
 // Deployer is and interface that can deploy a cloudformation
@@ -32,7 +33,7 @@ func New(cw cloudformationiface.CloudFormationAPI, u uploader.Uploader) Deployer
 
 // Deploys our stack
 func (d *deployer) Deploy(options *DeployOptions) error {
-	folder := options.TemplateFolder
+	folder := normalizeFolderPath(options.TemplateFolder)
 	bucket := options.Bucket
 	helper := &cloudFormationHelper{d.svc}
 	mainTemplate := path.Join(options.TemplateFolder, options.MainTemplate)
@@ -70,6 +71,7 @@ func (d *deployer) Deploy(options *DeployOptions) error {
 	templateURL, err := d.uploadTemplates(templates, folder, mainTemplate, bucket, prefix)
 
 	if err != nil {
+		log.Printf("Error uploading templates: %s", err.Error())
 		return err
 	}
 
@@ -131,4 +133,11 @@ func findTemplates(dir string) ([]string, error) {
 
 func calculateBucketPrefix(stackName, bucketFolder, version string) string {
 	return path.Join(bucketFolder, stackName, version)
+}
+
+func normalizeFolderPath(folder string) string {
+	if strings.Index(folder, "./") == 0 {
+		return folder[2:]
+	}
+	return folder
 }
