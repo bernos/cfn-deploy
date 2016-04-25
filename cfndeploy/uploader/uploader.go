@@ -2,12 +2,13 @@ package uploader
 
 import (
 	"errors"
+	"fmt"
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/service/s3/s3manager"
 	"github.com/aws/aws-sdk-go/service/s3/s3manager/s3manageriface"
 	"os"
 	"path"
-	"path/filepath"
+	"strings"
 	"sync"
 )
 
@@ -20,7 +21,7 @@ var (
 // Uploader describes an interface for uploading files and folders
 // to S3
 type Uploader interface {
-	UploadFolder(folder, bucket, keyPrefix string) (UploadResults, error)
+	UploadFiles(files []string, basePath, bucket, keyPrefix string) (UploadResults, error)
 	UploadFile(file, bucket, key string) *UploadResult
 }
 
@@ -67,7 +68,7 @@ type uploader struct {
 	s3 s3manageriface.UploaderAPI
 }
 
-func (u *uploader) UploadFolder(folder, bucket, keyPrefix string) (UploadResults, error) {
+func (u *uploader) UploadFiles(files []string, basePath, bucket, keyPrefix string) (UploadResults, error) {
 	var (
 		results UploadResults
 		wg      sync.WaitGroup
@@ -76,32 +77,51 @@ func (u *uploader) UploadFolder(folder, bucket, keyPrefix string) (UploadResults
 	rc := make(chan *UploadResult)
 	defer close(rc)
 
-	files, err := u.buildUploadList(folder)
+	for _, file := range files {
+		wg.Add(1)
 
-	if err == nil {
-		for _, file := range files {
-			wg.Add(1)
+		go func(file string) {
+			key, err := calculateBucketKey(file, basePath, keyPrefix)
 
-			go func(file string) {
-				rc <- u.UploadFile(file, bucket, path.Join(keyPrefix, file))
-			}(file)
-		}
-
-		go func() {
-			for r := range rc {
-				results = append(results, r)
-				wg.Done()
+			if err != nil {
+				rc <- &UploadResult{Error: err}
+			} else {
+				rc <- u.UploadFile(file, bucket, key)
 			}
-		}()
-
-		wg.Wait()
+		}(file)
 	}
+
+	go func() {
+		for r := range rc {
+			results = append(results, r)
+			wg.Done()
+		}
+	}()
+
+	wg.Wait()
 
 	if results.HasErrors() {
-		err = ErrFolderUpload
+		return results, ErrFolderUpload
 	}
 
-	return results, err
+	return results, nil
+}
+
+func calculateBucketKey(file, basePath, prefix string) (string, error) {
+	file, err := stripBasePath(file, basePath)
+
+	if err != nil {
+		return file, err
+	}
+
+	return path.Join(prefix, file), nil
+}
+
+func stripBasePath(file, basePath string) (string, error) {
+	if strings.Index(file, basePath) == 0 {
+		return file[len(basePath):], nil
+	}
+	return file, fmt.Errorf("File %s not based at %s", file, basePath)
 }
 
 func (u *uploader) UploadFile(file, bucket, key string) *UploadResult {
@@ -133,18 +153,4 @@ func (u *uploader) UploadFile(file, bucket, key string) *UploadResult {
 	}
 
 	return result
-}
-
-func (u *uploader) buildUploadList(dir string) ([]string, error) {
-	var files []string
-
-	return files, filepath.Walk(dir, func(path string, info os.FileInfo, err error) error {
-		if err != nil {
-			return err
-		}
-		if !info.IsDir() {
-			files = append(files, path)
-		}
-		return nil
-	})
 }

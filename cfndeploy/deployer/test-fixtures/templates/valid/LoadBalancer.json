@@ -1,0 +1,27 @@
+{
+    "AWSTemplateFormatVersion": "2010-09-09",
+    "Description": "",
+    "Parameters": {
+        "TemplateBaseUrl": {
+            "Type": "String"
+        },
+        "Version": {
+            "Type": "String"
+        }
+    },
+    "Resources": {
+        "WebLoadBalancer": {
+            "Type": "AWS::ElasticLoadBalancing::LoadBalancer",
+            "Properties": {
+                "AvailabilityZones": {
+                    "Fn::GetAZs": ""
+                },
+                "Listeners": [{
+                    "LoadBalancerPort": "80",
+                    "InstancePort": "80",
+                    "Protocol": "HTTP"
+                }]
+            }
+        }
+    }
+}

@@ -32,9 +32,13 @@ func TestUploadFile(t *testing.T) {
 	t.Errorf("%#v", r)
 }
 
-func TestUploadFolder(t *testing.T) {
+func TestUploadFiles(t *testing.T) {
 	u := testBuildUploader()
-	r, _ := u.UploadFolder("./test-fixtures", defaultBucket, "key-prefix")
+	files := []string{
+		"./test-fixtures/one.txt",
+	}
+
+	r, _ := u.UploadFiles(files, defaultBucket, "key-prefix")
 
 	for _, rs := range r {
 		t.Errorf("%#v\n", rs)
