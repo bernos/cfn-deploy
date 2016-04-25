@@ -35,3 +35,48 @@ func TestDeploy(t *testing.T) {
 
 	t.Errorf("Error: %s", err.Error())
 }
+
+func TestCalculateBucketPrefix(t *testing.T) {
+	tests := []struct {
+		bucketFolder string
+		stackName    string
+		version      string
+		want         string
+	}{
+		{"foo", "stack", "123", "foo/stack/123"},
+		{"", "stack", "123", "stack/123"},
+	}
+
+	for _, tt := range tests {
+		got := calculateBucketPrefix(tt.stackName, tt.bucketFolder, tt.version)
+
+		if got != tt.want {
+			t.Errorf("Want %s, got %s", tt.want, got)
+		}
+	}
+}
+
+func TestBaseURL(t *testing.T) {
+	tests := []struct {
+		url  string
+		want string
+	}{
+		{"http://example.com/foo/bar/baz.txt", "http://example.com/foo/bar/"},
+		{"http://example.com/foo.txt", "http://example.com/"},
+	}
+
+	for _, tt := range tests {
+		got := baseURL(tt.url)
+
+		if got != tt.want {
+			t.Errorf("Want %s, got %s", tt.want, got)
+		}
+	}
+}
+
+func TestChecksumTemplates(t *testing.T) {
+	files, _ := findTemplates("./test-fixtures/templates/valid")
+	// files = append(files, "bogman")
+	sum, _ := checksumTemplates(files)
+	t.Error(sum)
+}

@@ -1,9 +1,11 @@
 package deployer
 
 import (
+	"crypto/sha1"
 	"fmt"
 	"github.com/aws/aws-sdk-go/service/cloudformation/cloudformationiface"
 	"github.com/bernos/cfn-deploy/cfndeploy/uploader"
+	"io/ioutil"
 	"log"
 	"os"
 	"path"
@@ -11,39 +13,44 @@ import (
 	"strings"
 )
 
-// Deployer is and interface that can deploy a cloudformation
-// stack
+// Deployer is and interface that can deploy a cloudformation stack
 type Deployer interface {
 	Deploy(*DeployOptions) error
 }
 
 // deployer implements the Deployer interface
 type deployer struct {
-	svc cloudformationiface.CloudFormationAPI
-	u   uploader.Uploader
+	svc    cloudformationiface.CloudFormationAPI
+	helper *cloudFormationHelper
+	u      uploader.Uploader
 }
 
 // New creates a new Deployer instance
-func New(cw cloudformationiface.CloudFormationAPI, u uploader.Uploader) Deployer {
+func New(c cloudformationiface.CloudFormationAPI, u uploader.Uploader) Deployer {
 	return &deployer{
-		svc: cw,
-		u:   u,
+		svc:    c,
+		u:      u,
+		helper: &cloudFormationHelper{c},
 	}
 }
 
-// Deploys our stack
+// Deploy detploys a cloudformation stack. If the stack does not exist it will
+// be created, otherwise the existing stack will be updated.
 func (d *deployer) Deploy(options *DeployOptions) error {
-	folder := normalizeFolderPath(options.TemplateFolder)
+	folder := options.TemplateFolder
 	bucket := options.Bucket
-	helper := &cloudFormationHelper{d.svc}
 	mainTemplate := path.Join(options.TemplateFolder, options.MainTemplate)
 
 	if options.StackParams == nil {
 		options.StackParams = StackParams(make(map[string]string))
 	}
 
+	if options.StackTags == nil {
+		options.StackTags = StackTags(make(map[string]string))
+	}
+
 	log.Printf("Checking if stack already exists")
-	exists, err := helper.StackExists(options.StackName)
+	exists, err := d.helper.StackExists(options.StackName)
 
 	if err != nil {
 		return err
@@ -55,27 +62,24 @@ func (d *deployer) Deploy(options *DeployOptions) error {
 		return err
 	}
 
-	log.Printf("Validating templates")
-	validationError := helper.ValidateTemplates(templates)
+	version, err := checksumTemplates(templates)
 
-	if validationError != nil {
-		return validationError
+	if err != nil {
+		return err
 	}
 
-	version := checksumTemplates(templates)
 	prefix := path.Join(
-		calculateBucketPrefix(options.BucketFolder, options.StackName, version),
+		calculateBucketPrefix(options.StackName, options.BucketFolder, version),
 		"templates")
 
 	log.Printf("Uploading templates")
-	templateURL, err := d.uploadTemplates(templates, folder, mainTemplate, bucket, prefix)
+	templateURL, err := d.uploadTemplates(templates, mainTemplate, bucket, prefix)
 
 	if err != nil {
 		log.Printf("Error uploading templates: %s", err.Error())
 		return err
 	}
 
-	// TODO: this is wrong. Needs to be folder of templateURL
 	options.StackParams["TemplateBaseUrl"] = templateURL
 	options.StackParams["Version"] = version
 
@@ -88,22 +92,32 @@ func (d *deployer) Deploy(options *DeployOptions) error {
 	return d.create(templateURL, options.StackParams, options.StackTags)
 }
 
+// create creates a cloudforamtion stack
 func (d *deployer) create(templateURL string, params StackParams, tags StackTags) error {
 	log.Printf("create(%s, %v, %v)", templateURL, params, tags)
 	return fmt.Errorf("Not implemented")
 }
 
+// update updates a cloudformation stack
 func (d *deployer) update(templateURL string, params StackParams, tags StackTags) error {
 	return fmt.Errorf("Not implemented")
 }
 
-// uploadTemplates uploads all templates, and returns the URL
-// of the main template
-func (d *deployer) uploadTemplates(templates []string, basePath, mainTemplate, bucket, prefix string) (string, error) {
+// uploadTemplates uploads all templates to S3, and returns the base URL path of
+// the main template
+func (d *deployer) uploadTemplates(templates []string, mainTemplate, bucket, prefix string) (string, error) {
+	log.Printf("Validating templates")
+
+	if err := d.helper.ValidateTemplates(templates); err != nil {
+		return "", err
+	}
+
+	basePath := filepath.Dir(mainTemplate)
+
 	if results, err := d.u.UploadFiles(templates, basePath, bucket, prefix); err == nil {
 		for _, result := range results {
 			if result.File == mainTemplate {
-				return result.URL, nil
+				return baseURL(result.URL), nil
 			}
 		}
 		return "", fmt.Errorf("Unable to find url of main template")
@@ -112,11 +126,28 @@ func (d *deployer) uploadTemplates(templates []string, basePath, mainTemplate, b
 	}
 }
 
-func checksumTemplates(files []string) string {
-	// TODO: implement this
-	return ""
+func checksumTemplates(files []string) (string, error) {
+	hash := sha1.New()
+
+	for _, file := range files {
+		data, err := ioutil.ReadFile(file)
+
+		if err != nil {
+			return "", err
+		}
+
+		_, werr := hash.Write(data)
+
+		if werr != nil {
+			return "", werr
+		}
+	}
+
+	return fmt.Sprintf("%x", hash.Sum(nil))[:8], nil
 }
 
+// findTemplates recursively walks the provided dir and returns a slice of
+// filenames of all files
 func findTemplates(dir string) ([]string, error) {
 	var files []string
 
@@ -131,13 +162,13 @@ func findTemplates(dir string) ([]string, error) {
 	})
 }
 
+// calculateBucketPrefix returns the appropriate bucket key prefix for the given
+// stackName, bucketFolder and version
 func calculateBucketPrefix(stackName, bucketFolder, version string) string {
 	return path.Join(bucketFolder, stackName, version)
 }
 
-func normalizeFolderPath(folder string) string {
-	if strings.Index(folder, "./") == 0 {
-		return folder[2:]
-	}
-	return folder
+// baseURL returns all but the file part of the given url
+func baseURL(url string) string {
+	return url[:strings.LastIndex(url, "/")+1]
 }

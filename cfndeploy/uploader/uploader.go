@@ -124,8 +124,8 @@ func calculateBucketKey(file, basePath, prefix string) (string, error) {
 }
 
 func stripBasePath(file, basePath string) (string, error) {
-	if strings.Index(file, basePath) == 0 {
-		return file[len(basePath):], nil
+	if i := strings.Index(file, basePath); i > -1 {
+		return file[i+len(basePath):], nil
 	}
 	return file, fmt.Errorf("File %s not based at %s", file, basePath)
 }
