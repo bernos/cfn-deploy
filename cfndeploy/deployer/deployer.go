@@ -82,17 +82,20 @@ func (d *deployer) Deploy(options *DeployOptions) error {
 	params := d.buildStackParams(version, templateURL, options.StackParams)
 
 	var (
-		stackID string
+		stackID       string
+		desiredStatus string
 	)
 
 	if exists {
 		stackID, err = d.update(options.StackName, templateURL, params, options.StackTags)
+		desiredStatus = cloudformation.StackStatusUpdateComplete
 	} else {
 		stackID, err = d.create(options.StackName, templateURL, params, options.StackTags)
+		desiredStatus = cloudformation.StackStatusCreateComplete
 	}
 
 	if err == nil {
-		log.Printf("Success! %s", stackID)
+		err = d.helper.WaitForStack(stackID, desiredStatus)
 	}
 
 	return err

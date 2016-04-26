@@ -13,7 +13,7 @@ var (
 	defaultBucket       = "seek-candidate-cfn-templates-test"
 	defaultPrefix       = "deployer-test"
 	defaultBucketFolder = "bucket-folder"
-	defaultStackName    = "test-stack"
+	defaultStackName    = "cfn-deploy-test-stack"
 )
 
 func TestDeploy(t *testing.T) {

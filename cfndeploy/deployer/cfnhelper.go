@@ -1,11 +1,18 @@
 package deployer
 
 import (
+	"fmt"
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/service/cloudformation"
 	"github.com/aws/aws-sdk-go/service/cloudformation/cloudformationiface"
 	"io/ioutil"
+	"regexp"
 	"sync"
+	"time"
+)
+
+var (
+	inProgressRegexp = regexp.MustCompile(".+_IN_PROGRESS$")
 )
 
 type cloudFormationHelper struct {
@@ -101,4 +108,45 @@ func (c cloudFormationHelper) ValidateTemplate(file string) error {
 	_, err = c.svc.ValidateTemplate(params)
 
 	return err
+}
+
+func (c cloudFormationHelper) WaitForStack(stackID, desiredState string) error {
+	params := &cloudformation.DescribeStacksInput{
+		StackName: aws.String(stackID),
+	}
+
+	start := time.Now().UTC()
+	timeout := time.Second * 60 * 20
+
+	for {
+		resp, err := c.svc.DescribeStacks(params)
+
+		if err != nil {
+			return err
+		}
+
+		if len(resp.Stacks) == 0 {
+			return fmt.Errorf("Stack with ID %s not found", stackID)
+		}
+
+		if len(resp.Stacks) != 1 {
+			return fmt.Errorf("Ambiguous stack ID %s", stackID)
+		}
+
+		status := *resp.Stacks[0].StackStatus
+
+		if status == desiredState {
+			return nil
+		}
+
+		if !inProgressRegexp.MatchString(status) {
+			return fmt.Errorf("Unexpected stack status. Wanted %s, but got %s", desiredState, status)
+		}
+
+		if time.Since(start) > timeout {
+			return fmt.Errorf("Stack %s failed to reach state %s within %s", stackID, desiredState, timeout)
+		}
+
+		time.Sleep(time.Second * 5)
+	}
 }
