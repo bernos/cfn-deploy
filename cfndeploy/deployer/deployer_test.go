@@ -33,7 +33,9 @@ func TestDeploy(t *testing.T) {
 
 	err := d.Deploy(o)
 
-	t.Errorf("Error: %s", err.Error())
+	if err != nil {
+		t.Errorf("Error: %s", err.Error())
+	}
 }
 
 func TestCalculateBucketPrefix(t *testing.T) {

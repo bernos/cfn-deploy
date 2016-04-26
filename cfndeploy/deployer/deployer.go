@@ -3,6 +3,8 @@ package deployer
 import (
 	"crypto/sha1"
 	"fmt"
+	"github.com/aws/aws-sdk-go/aws"
+	"github.com/aws/aws-sdk-go/service/cloudformation"
 	"github.com/aws/aws-sdk-go/service/cloudformation/cloudformationiface"
 	"github.com/bernos/cfn-deploy/cfndeploy/uploader"
 	"io/ioutil"
@@ -37,8 +39,6 @@ func New(c cloudformationiface.CloudFormationAPI, u uploader.Uploader) Deployer 
 // Deploy detploys a cloudformation stack. If the stack does not exist it will
 // be created, otherwise the existing stack will be updated.
 func (d *deployer) Deploy(options *DeployOptions) error {
-	folder := options.TemplateFolder
-	bucket := options.Bucket
 	mainTemplate := path.Join(options.TemplateFolder, options.MainTemplate)
 
 	if options.StackParams == nil {
@@ -56,7 +56,7 @@ func (d *deployer) Deploy(options *DeployOptions) error {
 		return err
 	}
 
-	templates, err := findTemplates(folder)
+	templates, err := findTemplates(options.TemplateFolder)
 
 	if err != nil {
 		return err
@@ -73,34 +73,79 @@ func (d *deployer) Deploy(options *DeployOptions) error {
 		"templates")
 
 	log.Printf("Uploading templates")
-	templateURL, err := d.uploadTemplates(templates, mainTemplate, bucket, prefix)
+	templateURL, err := d.uploadTemplates(templates, mainTemplate, options.Bucket, prefix)
 
 	if err != nil {
-		log.Printf("Error uploading templates: %s", err.Error())
 		return err
 	}
 
-	options.StackParams["TemplateBaseUrl"] = templateURL
-	options.StackParams["Version"] = version
+	params := d.buildStackParams(version, templateURL, options.StackParams)
+
+	var (
+		stackID string
+	)
 
 	if exists {
-		log.Printf("Updating stack")
-		return d.update(templateURL, options.StackParams, options.StackTags)
+		stackID, err = d.update(options.StackName, templateURL, params, options.StackTags)
+	} else {
+		stackID, err = d.create(options.StackName, templateURL, params, options.StackTags)
 	}
 
-	log.Printf("Creating stack")
-	return d.create(templateURL, options.StackParams, options.StackTags)
+	if err == nil {
+		log.Printf("Success! %s", stackID)
+	}
+
+	return err
 }
 
 // create creates a cloudforamtion stack
-func (d *deployer) create(templateURL string, params StackParams, tags StackTags) error {
-	log.Printf("create(%s, %v, %v)", templateURL, params, tags)
-	return fmt.Errorf("Not implemented")
+func (d *deployer) create(stackName, templateURL string, params StackParams, tags StackTags) (string, error) {
+	if resp, err := d.svc.CreateStack(d.buildCreateStackInput(stackName, templateURL, params, tags)); err == nil {
+		return *resp.StackId, nil
+	} else {
+		return "", err
+	}
+}
+
+// buildCreateStackInput builds up the CreateStackInput struct
+func (d *deployer) buildCreateStackInput(stackName, templateURL string, params StackParams, tags StackTags) *cloudformation.CreateStackInput {
+	createStackInput := &cloudformation.CreateStackInput{
+		StackName:   aws.String(stackName),
+		Parameters:  params.AWSParams(),
+		Tags:        tags.AWSTags(),
+		TemplateURL: aws.String(templateURL),
+	}
+
+	return createStackInput
+}
+
+// buildStackParams builds up StackParams, including version number and template base URL
+func (d *deployer) buildStackParams(version, mainTemplateURL string, params StackParams) StackParams {
+	params["Version"] = version
+	params["TemplateBaseUrl"] = baseURL(mainTemplateURL)
+
+	return params
 }
 
 // update updates a cloudformation stack
-func (d *deployer) update(templateURL string, params StackParams, tags StackTags) error {
-	return fmt.Errorf("Not implemented")
+func (d *deployer) update(stackName, templateURL string, params StackParams, tags StackTags) (string, error) {
+	if resp, err := d.svc.UpdateStack(d.buildUpdateStackInput(stackName, templateURL, params, tags)); err == nil {
+		return *resp.StackId, nil
+	} else {
+		return "", err
+	}
+}
+
+// buildUpdateStackInput builds up the CreateStackInput struct
+func (d *deployer) buildUpdateStackInput(stackName, templateURL string, params StackParams, tags StackTags) *cloudformation.UpdateStackInput {
+	updateStackInput := &cloudformation.UpdateStackInput{
+		StackName:   aws.String(stackName),
+		Parameters:  params.AWSParams(),
+		Tags:        tags.AWSTags(),
+		TemplateURL: aws.String(templateURL),
+	}
+
+	return updateStackInput
 }
 
 // uploadTemplates uploads all templates to S3, and returns the base URL path of
@@ -117,7 +162,7 @@ func (d *deployer) uploadTemplates(templates []string, mainTemplate, bucket, pre
 	if results, err := d.u.UploadFiles(templates, basePath, bucket, prefix); err == nil {
 		for _, result := range results {
 			if result.File == mainTemplate {
-				return baseURL(result.URL), nil
+				return result.URL, nil
 			}
 		}
 		return "", fmt.Errorf("Unable to find url of main template")

@@ -50,38 +50,6 @@ func (c cloudFormationHelper) StackExists(name string) (bool, error) {
 	return found, err
 }
 
-// func (c cloudFormationHelper) StackExists(name string) (bool, error) {
-// 	params := &cloudformation.DescribeStacksInput{
-// 		StackName: aws.String(name),
-// 	}
-
-// 	resp, err := c.svc.DescribeStacks(params)
-
-// 	if err != nil {
-// 		if awsErr, ok := err.(awserr.Error); ok {
-// 			// Get error details
-// 			log.Println("Error:", awsErr.Code(), awsErr.Message())
-
-// 			// Prints out full error message, including original error if there was one.
-// 			log.Println("Error:", awsErr.Error())
-
-// 			// Get original error
-// 			if origErr := awsErr.OrigErr(); origErr != nil {
-// 				// operate on original error.
-// 			}
-
-// 		}
-
-// 		return false, err
-// 	}
-
-// 	if len(resp.Stacks) > 1 {
-// 		return false, fmt.Errorf("Found more than one stack with the name '%s'", name)
-// 	}
-
-// 	return len(resp.Stacks) == 1, nil
-// }
-
 func (c cloudFormationHelper) ValidateTemplates(files []string) error {
 	var (
 		errors []error

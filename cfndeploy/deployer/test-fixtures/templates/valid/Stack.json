@@ -13,7 +13,7 @@
             "Type": "AWS::CloudFormation::Stack",
             "Properties": {
                 "TemplateURL": {
-                    "Fn::Join": ["/", [{
+                    "Fn::Join": ["", [{
                         "Ref": "TemplateBaseUrl"
                     }, "LoadBalancer.json"]]
                 },
