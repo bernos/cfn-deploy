@@ -6,6 +6,7 @@ import (
 	"github.com/aws/aws-sdk-go/service/cloudformation"
 	"github.com/aws/aws-sdk-go/service/cloudformation/cloudformationiface"
 	"io/ioutil"
+	"log"
 	"regexp"
 	"sync"
 	"time"
@@ -148,5 +149,45 @@ func (c cloudFormationHelper) WaitForStack(stackID, desiredState string) error {
 		}
 
 		time.Sleep(time.Second * 5)
+	}
+}
+
+func (c cloudFormationHelper) LogStackEvents(stackID string, logger func(*cloudformation.StackEvent, error)) (cancel func()) {
+	done := make(chan struct{})
+	ticker := time.NewTicker(time.Second * 5)
+
+	params := &cloudformation.DescribeStackEventsInput{
+		StackName: aws.String(stackID),
+	}
+
+	go func() {
+		defer ticker.Stop()
+		for {
+			resp, err := c.svc.DescribeStackEvents(params)
+
+			if err != nil {
+				logger(nil, err)
+			} else {
+				fmt.Printf("%+v", resp.StackEvents)
+
+				// Forwared through events until find last id
+
+				// Backward through events calling logger
+
+				// update last Id
+			}
+
+			log.Printf("IM GETTING EVENTS")
+
+			select {
+			case <-done:
+				return
+			case <-ticker.C:
+			}
+		}
+	}()
+
+	return func() {
+		close(done)
 	}
 }

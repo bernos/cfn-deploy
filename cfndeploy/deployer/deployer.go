@@ -95,7 +95,11 @@ func (d *deployer) Deploy(options *DeployOptions) error {
 	}
 
 	if err == nil {
+		cancel := d.helper.LogStackEvents(stackID, func(e *cloudformation.StackEvent, err error) {
+			log.Printf("%v", e)
+		})
 		err = d.helper.WaitForStack(stackID, desiredStatus)
+		cancel()
 	}
 
 	return err
