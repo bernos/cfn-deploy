@@ -40,7 +40,7 @@ func main() {
 					Name:   "main,m",
 					Usage:  "Name of the main cloudforamtion template",
 					EnvVar: "CFNDEPLOY_MAIN",
-					Value:  "main.json",
+					Value:  "Stack.json",
 				},
 				cli.StringFlag{
 					Name:   "bucket,b",
@@ -52,13 +52,13 @@ func main() {
 					Usage:  "Optional bucket folder to upload templates to",
 					EnvVar: "CFNDEPLOY_BUCKET_FOLDER",
 				},
-				cli.StringSliceFlag{
-					Name:  "param,p",
-					Usage: "Stack parameters, in the format name=value. Specify multiple times for multiple params",
+				cli.StringFlag{
+					Name:  "params,p",
+					Usage: "Stack parameters, in the format ParamOne=ValueOne,Param2=Value2",
 				},
-				cli.StringSliceFlag{
-					Name:  "tag,t",
-					Usage: "Stack tag, in the format tag=value. Specify multiple times for multiple tags",
+				cli.StringFlag{
+					Name:  "tags,t",
+					Usage: "Stack tag, in the format TagNameOne=TagValueOne,TagNameTwo=TagValueTwo",
 				},
 			},
 		},

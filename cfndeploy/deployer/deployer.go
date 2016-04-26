@@ -121,6 +121,9 @@ func (d *deployer) buildCreateStackInput(stackName, templateURL string, params S
 		Parameters:  params.AWSParams(),
 		Tags:        tags.AWSTags(),
 		TemplateURL: aws.String(templateURL),
+		Capabilities: []*string{
+			aws.String(cloudformation.CapabilityCapabilityIam),
+		},
 	}
 
 	return createStackInput
@@ -150,6 +153,9 @@ func (d *deployer) buildUpdateStackInput(stackName, templateURL string, params S
 		Parameters:  params.AWSParams(),
 		Tags:        tags.AWSTags(),
 		TemplateURL: aws.String(templateURL),
+		Capabilities: []*string{
+			aws.String(cloudformation.CapabilityCapabilityIam),
+		},
 	}
 
 	return updateStackInput

@@ -1,0 +1,38 @@
+{
+    "AWSTemplateFormatVersion": "2010-09-09",
+    "Parameters": {
+        "TemplateBaseUrl": {
+            "Type": "String"
+        },
+        "Version": {
+            "Type": "String"
+        }
+    },
+    "Resources": {
+        "WebLoadBalancer": {
+            "Type": "AWS::CloudFormation::Stack",
+            "Properties": {
+                "TemplateURL": {
+                    "Fn::Join": ["", [{
+                        "Ref": "TemplateBaseUrl"
+                    }, "LoadBalancer.json"]]
+                },
+                "Parameters": {
+                    "TemplateBaseUrl": {
+                        "Ref": "TemplateBaseUrl"
+                    },
+                    "Version": {
+                        "Ref": "Version"
+                    }
+                }
+            }
+        }
+    },
+    "Outputs": {
+        "Version": {
+            "Value": {
+                "Ref": "Version"
+            }
+        }
+    }
+}

@@ -6,7 +6,6 @@ import (
 	"github.com/aws/aws-sdk-go/service/cloudformation"
 	"github.com/aws/aws-sdk-go/service/cloudformation/cloudformationiface"
 	"io/ioutil"
-	"log"
 	"regexp"
 	"sync"
 	"time"
@@ -162,22 +161,34 @@ func (c cloudFormationHelper) LogStackEvents(stackID string, logger func(*cloudf
 
 	go func() {
 		defer ticker.Stop()
+		var lastEventID string
+
 		for {
 			resp, err := c.svc.DescribeStackEvents(params)
 
 			if err != nil {
 				logger(nil, err)
 			} else {
-				fmt.Printf("%+v", resp.StackEvents)
+				if len(resp.StackEvents) > 0 {
+					newEvents := resp.StackEvents[:1]
 
-				// Forwared through events until find last id
+					if lastEventID != "" {
+						newEvents = resp.StackEvents
 
-				// Backward through events calling logger
+						for i, event := range resp.StackEvents {
+							if *event.EventId == lastEventID {
+								newEvents = resp.StackEvents[:i]
+								break
+							}
+						}
+					}
 
-				// update last Id
+					for i := len(newEvents) - 1; i >= 0; i-- {
+						logger(newEvents[i], nil)
+						lastEventID = *newEvents[i].EventId
+					}
+				}
 			}
-
-			log.Printf("IM GETTING EVENTS")
 
 			select {
 			case <-done:

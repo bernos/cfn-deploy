@@ -13,11 +13,9 @@
         "WebLoadBalancer": {
             "Type": "AWS::ElasticLoadBalancing::LoadBalancer",
             "Properties": {
-                "Subnets": [
-                    "subnet-039fc374",
-                    "subnet-7e41771b",
-                    "subnet-f4d3e5b2"
-                ],
+                "AvailabilityZones": {
+                    "Fn::GetAZs": ""
+                },
                 "Listeners": [{
                     "LoadBalancerPort": "80",
                     "InstancePort": "80",
